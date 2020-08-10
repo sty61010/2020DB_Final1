@@ -1,0 +1,60 @@
+package org.calvin.scheduler;
+
+import java.util.LinkedList;
+import java.util.Queue;
+
+import org.vanilladb.bench.benchmarks.micro.MicrobenchTransactionType;
+import org.vanilladb.bench.server.procedure.micro.MicroCheckDatabaseProc;
+import org.vanilladb.bench.server.procedure.micro.MicroTestbedLoaderProc;
+import org.vanilladb.bench.server.procedure.micro.MicroTxnProc;
+import org.vanilladb.core.*;
+import org.vanilladb.core.server.VanillaDb;
+import org.vanilladb.core.sql.storedprocedure.StoredProcedure;
+import org.vanilladb.core.storage.tx.TransactionMgr;
+import org.calvin.storedprocedures.CalvinStoredProcFactory;
+import org.calvin.storedprocedures.CalvinStoredProcedure;
+import org.calvin.groupcomm.StoredProcInfo;
+import org.calvin.server.Calvin;
+public class CalvinScheduler {
+
+	private CalvinStoredProcFactory cspFactory;
+	private Queue<StoredProcInfo> spiList = new LinkedList<StoredProcInfo>();
+	
+	public CalvinScheduler () {
+	}
+	
+	public void pushSchedule(StoredProcInfo... infos) {
+		for(int i=0; i<infos.length;i++) {
+			spiList.add(infos[i]);
+		}
+	}
+
+	public void runSchedule() {
+		while(spiList.size() != 0) {
+			StoredProcInfo info = spiList.remove();
+//			CalvinStoredProcedure<?> csp = (CalvinStoredProcedure) cspFactory.getStroredProcedure(info.getPorcID());
+			if (VanillaDb.spFactory() == null) System.out.println("fucking null");
+//			CalvinStoredProcedure<?> csp = (CalvinStoredProcedure<?>) VanillaDb.spFactory().getStroredProcedure(info.getPorcID());
+			CalvinStoredProcedure<?> csp;
+			switch (MicrobenchTransactionType.fromProcedureId(pid)) {
+			case TESTBED_LOADER:
+				csp = new MicroTestbedLoaderProc();
+				break;
+			case CHECK_DATABASE:
+				csp = new MicroCheckDatabaseProc();
+				break;
+			case MICRO_TXN:
+				csp = new MicroTxnProc();
+				break;
+			default:
+				throw new UnsupportedOperationException("The benchmarker does not recognize procedure " + pid + "");
+			}
+			csp.setTxNum(info.getTxNum());
+			csp.prepare(info.getPars());
+			csp.setID(info.getClienID(), info.getRteID());
+			csp.execute();
+//			VanillaDb.taskMgr().getExecutor().execute(csp);
+			
+		}
+	}
+}

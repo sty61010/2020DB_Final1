@@ -1,0 +1,51 @@
+package org.calvin.sql;
+
+import java.io.Serializable;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.vanilladb.core.sql.Constant;
+
+public class RecKey implements Serializable {
+	
+	private static final long serialVersionUID = -3674197558012838050L;
+	private String tableName;
+	private Map<String, Constant> predicate;
+	private int hashCode;
+	private int partition = -1;
+	
+	public RecKey(String tableName, Map<String, Constant> predicate) {
+		this.tableName = tableName;
+		this.predicate = predicate;
+		hash();
+	}
+//	public RecKey(String tableName, String[] flds, Constant[] val) {
+//		this.tableName = tableName;
+//		HashMap<String, Constant> recKeyMap = new HashMap<String, Constant>();
+//		for(int i=0; i<flds.length; i++) {
+//			recKeyMap.put(flds[i], val[i]);
+//		}
+//		this.predicate = recKeyMap;
+//	}
+	
+	private void hash() {
+		hashCode = 19;
+		hashCode = hashCode * 37 + tableName.hashCode();
+		//hashCode = hashCode * 37 + predicate.hashCode();
+	}
+	
+	public int getHashCode() {
+		return this.hashCode;
+	}
+	
+	public String getTableName() {
+		return tableName;
+	}
+	
+	public Map<String, Constant> getPred() {
+		return predicate;
+	}
+	public Constant getFeildVal(String fld) {
+		return predicate.get(fld);
+	}
+}

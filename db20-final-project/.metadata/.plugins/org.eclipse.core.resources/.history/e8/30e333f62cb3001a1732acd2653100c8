@@ -1,0 +1,261 @@
+package org.calvin.storedprocedures;
+
+import java.util.List;
+import java.sql.Connection;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+
+import org.calvin.cache.CalvinRecord;
+import org.calvin.concurrency.ConservativeConcurrencyMgr;
+import org.calvin.groupcomm.Pair;
+import org.calvin.groupcomm.Server2Server;
+import org.calvin.server.Calvin;
+import org.calvin.sql.RecKey;
+import org.vanilladb.comm.view.ProcessView;
+import org.vanilladb.core.*;
+import org.vanilladb.core.query.algebra.Plan;
+import org.vanilladb.core.query.algebra.Scan;
+import org.vanilladb.core.remote.storedprocedure.SpResultSet;
+import org.vanilladb.core.server.VanillaDb;
+import org.vanilladb.core.server.task.Task;
+import org.vanilladb.core.storage.tx.*;
+import org.vanilladb.core.sql.Constant;
+import org.vanilladb.core.sql.storedprocedure.*;
+
+public abstract class CalvinStoredProcedure <H extends StoredProcedureParamHelper> extends StoredProcedure<StoredProcedureParamHelper> implements Runnable{ 
+//	private static Logger logger = Logger.getLogger(StoredProcedure.class.getName());
+	
+	private class KeyQryPair {
+		private RecKey rk;
+		private String qry;
+		public KeyQryPair(RecKey rk, String qry) {
+			this.rk = rk;
+			this.qry = qry;
+		}
+	}
+	
+	protected H paramHelper;
+	private Transaction tx;
+	private long txNum;
+	private int localId;
+	private int mostReadsNode = 0;
+	private int[] readsPerNodes = new int[ProcessView.SERVER_COUNT];
+	
+	private Set<Integer> activeParticipants = new HashSet<Integer>();
+	private boolean isActive, isPassive;
+	
+	private Set<KeyQryPair> localReadRecKey = new HashSet<KeyQryPair>();
+	private Set<RecKey> remoteReadRecKey = new HashSet<RecKey>();
+	private Set<RecKey> localWriteRecKey = new HashSet<RecKey>();
+	private Set<RecKey> localInsertRecKey = new HashSet<RecKey>();
+	
+	private Map<RecKey, CalvinRecord> reads = new HashMap<RecKey, CalvinRecord>();
+
+	private int clientID;
+	private int rteID;
+	private SpResultSet rs;
+
+	public CalvinStoredProcedure(H helper) {
+		super(helper);
+		if (helper == null)
+			throw new IllegalArgumentException("paramHelper should not be null");
+		
+		paramHelper = helper;
+	}
+	
+	@Override
+	public void run() {
+		//prepare();
+		rs = execute();
+		
+		Calvin.server.sendStoredProcResults(rs, Calvin.server.server, this.clientID, this.rteID);
+	}
+	
+	protected abstract void prepareRecKey();
+	
+	public void setID(int clientId, int rteId) {
+		this.clientID = clientId;
+		this.rteID = rteId;
+	}
+	
+	public void prepare(Object... pars) {
+		
+		
+		// prepare parameters
+		if (paramHelper == null) System.out.println("mother fucker helper");
+		paramHelper.prepareParameters(pars);
+		
+		// create a transaction
+		boolean isReadOnly = paramHelper.isReadOnly();
+		// should replace vanillaDB with server
+		tx = Calvin.txMgr().newTransaction(Connection.TRANSACTION_SERIALIZABLE, isReadOnly);
+		registerConservativeLocks();
+		
+		prepareRecKey();
+		if(this.activeParticipants.isEmpty()) 
+			this.activeParticipants.add(mostReadsNode);
+		if(this.activeParticipants.contains(this.localId))
+			this.isActive = true;
+		else if(!this.localReadRecKey.isEmpty())
+			this.isPassive = true;
+		//TODO: cacheMgr
+		
+	}
+	
+	@Override
+	public SpResultSet execute() {
+		System.out.println("fuck 1");
+		boolean isCommitted = false;
+		
+		// Get all locks
+		acquireConservativeLocks();
+		// Do self part
+		executeSelf();
+		tx.commit();
+		isCommitted = true;
+		
+		System.out.println("fuck 2");
+		
+		return new SpResultSet(isCommitted, paramHelper.getResultSetSchema(), paramHelper.newResultSetRecord());
+	}
+	
+	public void executeSelf() {
+		// local read and send to remote
+		localread();
+		
+		if (this.isPassive)
+			return;
+		// Remote read
+		remoteRead(reads);
+		// local write
+		executeSql(reads);
+	}
+	
+	protected abstract void executeSql(Map<RecKey, CalvinRecord> reads);
+	
+	public void remoteRead(Map<RecKey, CalvinRecord> reads) {
+		for(RecKey rk: remoteReadRecKey) {
+			reads.put(rk, Calvin.cache.remoteRead(rk));
+		}
+	}
+	
+	public Map<RecKey, CalvinRecord> localread() {
+		Map<RecKey, CalvinRecord> mp = new HashMap<RecKey, CalvinRecord>();
+		List<Pair> list = new ArrayList<Pair>();
+		for(KeyQryPair pair: localReadRecKey) {
+			String qry = pair.qry;
+			String[] field = qry.split(" ");
+			Plan p = VanillaDb.newPlanner().createQueryPlan(qry, tx);
+			CalvinRecord cr = new CalvinRecord();
+			Scan s = p.open();
+			s.beforeFirst();
+			s.next();
+			//  read selected column
+			for(int i=1;;i++) {
+				if(field[i]=="FROM")
+					break;
+				Constant val = s.getVal(field[i]);
+				cr.setVal(field[i], val);
+			}
+			list.add(new Pair(cr, pair.rk));
+			mp.put(pair.rk, cr);
+		}
+		// Send p2p
+		for(int node: this.activeParticipants) {
+			if(node!=this.localId) Calvin.server.sendRecord2RemoteServer(node, list, Calvin.server.server);
+		}
+		return mp;
+	}
+	
+//	@Override
+//	protected abstract void executeSql() {
+		
+//	}
+	public void addReadKey(RecKey rk, String qry) {
+		// partion Mgr
+		int nodeId = Calvin.partionMgr.getPartition(rk);
+		if(nodeId==localId) {
+			this.localReadRecKey.add(new KeyQryPair(rk, qry));
+		} else {
+			this.remoteReadRecKey.add(rk);
+		}
+		
+		// TODO: readcount
+		readsPerNodes[nodeId]++;
+		if (readsPerNodes[nodeId] > readsPerNodes[mostReadsNode])
+			mostReadsNode = nodeId;
+	}
+	
+	public void addWriteKey(RecKey rk) {
+		int nodeId = Calvin.partionMgr.getPartition(rk);
+		if(nodeId==localId) 
+			this.localWriteRecKey.add(rk);
+		this.activeParticipants.add(nodeId);
+	}
+	
+	public void addInsertKey(RecKey rk) {
+		int nodeId = Calvin.partionMgr.getPartition(rk);
+		if(nodeId==localId) 
+			this.localInsertRecKey.add(rk);
+		this.activeParticipants.add(nodeId);
+	}
+	
+	public void update(RecKey rk, String qry) {
+		if (localWriteRecKey.contains(rk))
+			VanillaDb.newPlanner().executeUpdate(qry, tx);
+	}
+	
+	public void insert(RecKey rk, String qry) {
+		if (localInsertRecKey.contains(rk))
+			VanillaDb.newPlanner().executeUpdate(qry, tx);
+	}
+	
+	public void delete(RecKey rk, String qry) {
+		// XXX: Do we need a 'localDeleteKeys' for this ?
+		if (localWriteRecKey.contains(rk))
+			VanillaDb.newPlanner().executeUpdate(qry, tx);
+	}
+	
+//	protected H getParamHelper() {
+//		return paramHelper;
+//	}
+	
+	protected Transaction getTransaction() {
+		return tx;
+	}
+//	@Override
+	public boolean isReadOnly() {
+		return paramHelper.isReadOnly();
+	}
+	public void setTxNum(long txNum) {
+		this.txNum = txNum;
+	}
+	protected void abort() {
+		throw new ManuallyAbortException();
+	}
+	
+	protected void abort(String message) {
+		throw new ManuallyAbortException(message);
+	}
+	public void registerConservativeLocks() {
+		ConservativeConcurrencyMgr conMgr = (ConservativeConcurrencyMgr) this.tx.concurrencyMgr();
+		Set<RecKey> lrmap = new HashSet<RecKey>();
+		for(KeyQryPair pair: this.localReadRecKey) {
+			lrmap.add(pair.rk);
+		}
+		conMgr.RegisterReadKeys(lrmap);
+		conMgr.RegisterWriteKeys(this.localInsertRecKey);
+		conMgr.RegisterWriteKeys(this.localWriteRecKey);
+	}
+	public void acquireConservativeLocks() {
+		ConservativeConcurrencyMgr conMgr = (ConservativeConcurrencyMgr) this.tx.concurrencyMgr();
+		conMgr.requestLocks();
+	}
+	public H getParamHelper() {
+		return paramHelper;
+	}
+}

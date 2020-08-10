@@ -1,0 +1,25 @@
+package org.calvin.storedprocedures;
+
+
+import org.vanilladb.core.sql.storedprocedure.StoredProcedure;
+import org.vanilladb.core.sql.storedprocedure.StoredProcedureFactory;
+
+public interface  CalvinStoredProcFactory implement StoredProcedureFactory{
+
+//	public CalvinStoredProcFactory() {
+//		super(underlayerFactory);
+		// TODO Auto-generated constructor stub
+//	}
+
+	@Override
+	CalvinStoredProcedure<?> getStroredProcedure(int pid);
+//	{
+//		CalvinStoredProcedure<?> sp = new CalvinStoredProcedure();
+//		return sp;
+//	}
+
+//	public CalvinStoredProcedure<?> getStorePrecedure(int procID) {
+//		StoredProcedure<?> sp = new CalvinStoredProcedure();
+//		return sp;
+//	}
+}

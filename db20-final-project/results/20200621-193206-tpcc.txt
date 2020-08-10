@@ -1,0 +1,8 @@
+# of txns (including aborted) during benchmark period: 0
+
+PAYMENT - committed: 0, aborted: 0, avg latency: 0 ms
+ORDER_STATUS - committed: 0, aborted: 0, avg latency: 0 ms
+NEW_ORDER - committed: 0, aborted: 0, avg latency: 0 ms
+STOCK_LEVEL - committed: 0, aborted: 0, avg latency: 0 ms
+DELIVERY - committed: 0, aborted: 0, avg latency: 0 ms
+TOTAL - committed: 0, aborted: 0, avg latency: 0 ms

@@ -1,0 +1,33 @@
+package org.calvin.scheduler;
+
+import java.util.LinkedList;
+import java.util.Queue;
+
+import org.vanilladb.core.*;
+import org.vanilladb.core.sql.storedprocedure.StoredProcedure;
+import org.calvin.storedProcedures.*;
+import org.calvin.groupCommunication.*;
+public class CalvinScheduler {
+
+	private CalvinStoredProcFactory cspFactory;
+	private Queue<StoredProcInfo> spiList = new LinkedList<StoredProcInfo>();
+	public CalvinScheduler () {
+		
+	}
+	
+	public void pushSchedule(StoredProcInfo... infos) {
+		for(int i=0; i<infos.length;i++) {
+			spiList.add(infos[i]);
+		}
+	}
+
+	public void runSchedule() {
+		while(spiList.size() != 0) {
+			StoredProcInfo info = spiList.remove();
+			CalvinStoredProcedure<?> csp = (CalvinStoredProcedure) cspFactory.getStroredProcedure(info.getProcID());
+			csp.setTxNum(info.getTxNum());
+			csp.prepare(info.pars);
+			
+		}
+	}
+}

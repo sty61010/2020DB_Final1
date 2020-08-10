@@ -1,0 +1,31 @@
+package org.calvin.server;
+
+import org.calvin.groupcomm.GroupServer;
+import org.calvin.metadata.PartionMgr;
+import org.calvin.scheduler.CalvinScheduler;
+import org.calvin.storedprocedures.CalvinStoredProcedure;
+
+import java.util.logging.Logger;
+
+import org.calvin.cache.CacheMgr;
+
+public class Calvin {
+	
+	private static Logger logger = Logger.getLogger(GroupServer.class.getName());
+	
+	public static GroupServer server;
+	public static CacheMgr cache;
+	public static PartionMgr partionMgr;
+	public static CalvinScheduler scheduler;
+	
+	public static void init(int nodeID, ) {
+		
+		cache = new CacheMgr();
+		partionMgr = new PartionMgr();
+		scheduler = new CalvinScheduler();
+	    server = new GroupServer(nodeID);
+	}
+	
+	
+	
+}

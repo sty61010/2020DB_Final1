@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<qualifiedTypeNameHistroy>
+    <fullyQualifiedTypeName name="java.util.LinkedList"/>
+    <fullyQualifiedTypeName name="java.io.Serializable"/>
+    <fullyQualifiedTypeName name="org.calvin.groupCommunication.StoredProcInfo"/>
+    <fullyQualifiedTypeName name="java.util.HashSet"/>
+    <fullyQualifiedTypeName name="java.util.Set"/>
+    <fullyQualifiedTypeName name="org.vanilladb.core.remote.storedprocedure.SpResultSet"/>
+    <fullyQualifiedTypeName name="java.sql.Connection"/>
+    <fullyQualifiedTypeName name="org.vanilladb.bench.server.procedure.BasicStoredProcFactory"/>
+    <fullyQualifiedTypeName name="org.vanilladb.core.sql.storedprocedure.StoredProcedure"/>
+    <fullyQualifiedTypeName name="org.calvin.sql.RecKey"/>
+    <fullyQualifiedTypeName name="org.vanilladb.core.sql.Constant"/>
+    <fullyQualifiedTypeName name="java.util.HashMap"/>
+    <fullyQualifiedTypeName name="org.vanilladb.core.sql.DoubleConstant"/>
+    <fullyQualifiedTypeName name="org.vanilladb.core.server.VanillaDb"/>
+    <fullyQualifiedTypeName name="org.calvin.storedprocedures.CalvinStoredProcFactory"/>
+    <fullyQualifiedTypeName name="org.calvin.server.Calvin"/>
+    <fullyQualifiedTypeName name="org.vanilladb.core.sql.IntegerConstant"/>
+    <fullyQualifiedTypeName name="org.calvin.storedprocedures.CalvinStoredProcedure"/>
+</qualifiedTypeNameHistroy>
